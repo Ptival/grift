@@ -39,12 +39,12 @@ module GRIFT.InstructionSet.FD
   ( fdFromRepr
   ) where
 
-import Data.BitVector.Sized.App
-import Data.BitVector.Sized.Float.App
 import qualified Data.Parameterized.Map as Map
 import Data.Parameterized
 import Data.Parameterized.List
 
+import GRIFT.BitVector.BVApp
+import GRIFT.BitVector.BVFloatApp
 import GRIFT.InstructionSet
 import GRIFT.Semantics
 import GRIFT.Semantics.Utils
@@ -307,7 +307,7 @@ fSemantics = Map.fromList
       f_rs1 <- unBox32 (readFPR rs1)
       f_rs2 <- unBox32 (readFPR rs2)
 
-      let res_sign = (f32Sgn (extractE (knownNat @0) f_rs1) `xorE` f32Sgn (extractE (knownNat @0) f_rs2))
+      let res_sign = f32Sgn (extractE (knownNat @0) f_rs1) `xorE` f32Sgn (extractE (knownNat @0) f_rs2)
       let res_rst  = extractE' (knownNat @31) (knownNat @0) f_rs1
       let res' = zextE (res_sign `concatE` res_rst)
       res <- nanBox32 res'
@@ -779,7 +779,7 @@ dSemantics = Map.fromList
       let f_rs1 = readFPR rs1
       let f_rs2 = readFPR rs2
 
-      let res_sign = (f64Sgn (extractE (knownNat @0) f_rs1) `xorE` f64Sgn (extractE (knownNat @0) f_rs2))
+      let res_sign = f64Sgn (extractE (knownNat @0) f_rs1) `xorE` f64Sgn (extractE (knownNat @0) f_rs2)
       let res_rst  = extractE' (knownNat @63) (knownNat @0) f_rs1
       let res = zextE (res_sign `concatE` res_rst)
 

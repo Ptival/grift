@@ -57,8 +57,6 @@ module GRIFT.Simulation
 
 import Control.Lens ( (^.) )
 import Data.BitVector.Sized
-import Data.BitVector.Sized.App
-import Data.BitVector.Sized.Float.App
 import Data.Foldable
 import Data.Parameterized
 import Data.Parameterized.List
@@ -66,6 +64,8 @@ import Data.Traversable
 import qualified GHC.TypeLits as T
 import Prelude hiding ((!!))
 
+import GRIFT.BitVector.BVApp
+import GRIFT.BitVector.BVFloatApp
 import GRIFT.Decode
 import GRIFT.InstructionSet
 import GRIFT.InstructionSet.Known
@@ -161,7 +161,7 @@ evalInstExpr _ _ ib (InstBytes _) = do
   return $ withRV rv $ bitVector ib
 evalInstExpr iset inst _ (InstWord _) = do
   rv <- getRV
-  return $ (withRV rv $ bvZext $ encode iset inst)
+  return $ withRV rv $ bvZext $ encode iset inst
 evalInstExpr iset inst ib (InstStateApp e) = evalStateApp (evalInstExpr iset inst ib) e
 
 -- | This type represents a concrete component of the global state, after all
@@ -261,8 +261,8 @@ stepRV iset = do
           let cinst = decodeC rv (bvExtract 0 instBV)
           case cinst of
             Just i -> return (2, i)
-            _ -> return $ (4, decode iset instBV)
-        _ -> return $ (4, decode iset instBV)
+            _ -> return (4, decode iset instBV)
+        _ -> return (4, decode iset instBV)
 
     -- Execute
     execSemantics (evalInstExpr iset inst iw) (getInstSemantics $ semanticsFromOpcode iset opcode)
@@ -290,8 +290,8 @@ stepRVLog iset = do
           let cinst = decodeC rv (bvExtract 0 instBV)
           case cinst of
             Just i -> return (2, i)
-            _ -> return $ (4, decode iset instBV)
-        _ -> return $ (4, decode iset instBV)
+            _ -> return (4, decode iset instBV)
+        _ -> return (4, decode iset instBV)
 
     -- Log instruction BEFORE execution
     logInstruction iset inst iw
@@ -308,9 +308,9 @@ runRV' :: forall m rv . (RVStateM m rv, KnownRV rv) => InstructionSet rv -> Int 
 runRV' _ currSteps maxSteps | currSteps >= maxSteps = return currSteps
 runRV' iset currSteps maxSteps = do
   halted <- isHalted
-  case halted of
-    True  -> return currSteps
-    False -> stepRV iset >> runRV' iset (currSteps+1) maxSteps
+  if halted
+    then return currSteps
+    else stepRV iset >> runRV' iset (currSteps+1) maxSteps
 
 -- | Run for a given number of steps.
 runRV :: forall m rv . (RVStateM m rv, KnownRV rv) => Int -> m Int
@@ -322,9 +322,9 @@ runRVLog' :: forall m rv . (RVStateM m rv, KnownRV rv) => InstructionSet rv -> I
 runRVLog' _ currSteps maxSteps | currSteps >= maxSteps = return currSteps
 runRVLog' iset currSteps maxSteps = do
   halted <- isHalted
-  case halted of
-    True  -> return currSteps
-    False -> stepRVLog iset >> runRVLog' iset (currSteps+1) maxSteps
+  if halted
+    then return currSteps
+    else stepRVLog iset >> runRVLog' iset (currSteps+1) maxSteps
 
 -- | Like runRV, but log each instruction.
 runRVLog :: forall m rv . (RVStateM m rv, KnownRV rv) => Int -> m Int

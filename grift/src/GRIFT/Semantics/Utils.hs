@@ -68,13 +68,13 @@ module GRIFT.Semantics.Utils
   ) where
 
 import Data.BitVector.Sized
-import Data.BitVector.Sized.App
-import Data.BitVector.Sized.Float.App
 import qualified Data.Map as Map
 import Data.Map (Map)
 import Data.Parameterized
 import GHC.TypeLits
 
+import GRIFT.BitVector.BVApp
+import GRIFT.BitVector.BVFloatApp
 import GRIFT.Semantics
 import GRIFT.Types
 
@@ -99,7 +99,7 @@ jump :: forall expr rv . (BVExpr (expr rv), StateExpr expr, KnownRV rv)
 jump pc = case extsC (rvExts (knownRepr :: RVRepr rv)) of
   CYesRepr -> assignPC pc
   CNoRepr -> do
-    let addrValid = (pc `andE` litBV 0b11) `eqE` litBV 0
+    let addrValid = (pc `andE` litBV' 0b11) `eqE` litBV' 0
     branch addrValid
       $> assignPC pc
       $> raiseException InstructionAddressMisaligned pc
@@ -151,8 +151,8 @@ checkCSR write csr rst = do
   let priv = readPriv
   let csrRW = extractE' (knownNat @2) (knownNat @10) csr
   let csrPriv = extractE' (knownNat @2) (knownNat @8) csr
-  -- let csrBad = (notE (notE (priv `ltuE` csrPriv)) `andE` (iteE write (csrRW `ltuE` litBV 0b11) (litBV 0b1)))
-  let csrBad = (priv `ltuE` csrPriv) `orE` (write `andE` (notE (csrRW `ltuE` litBV 0b11)))
+  -- let csrBad = (notE (notE (priv `ltuE` csrPriv)) `andE` (iteE write (csrRW `ltuE` litBV' 0b11) (litBV' 0b1)))
+  let csrBad = (priv `ltuE` csrPriv) `orE` (write `andE` notE (csrRW `ltuE` litBV' 0b11))
 
   iw <- instWord
 
@@ -189,7 +189,7 @@ data Exception = EnvironmentCall
   deriving (Show)
 
 -- | Map an 'Exception' to its 'BitVector' representation.
-getMCause :: KnownNat w => Exception -> BitVector w
+getMCause :: KnownNat w => Exception -> BV w
 getMCause InstructionAddressMisaligned = 0
 getMCause IllegalInstruction           = 2
 getMCause Breakpoint                   = 3
@@ -230,7 +230,7 @@ data CSR = MVendorID
   deriving (Eq, Ord, Show, Bounded, Enum)
 
 -- | Translate a CSR to its 'BitVector' code.
-encodeCSR :: CSR -> BitVector 12
+encodeCSR :: CSR -> BV 12
 encodeCSR MVendorID  = 0xF11
 encodeCSR MArchID    = 0xF12
 encodeCSR MImpID     = 0xF13
@@ -256,7 +256,7 @@ encodeCSR FRm        = 0x002
 encodeCSR FCSR       = 0x003
 
 -- | Translate a 'BitVector' CSR code into a 'CSR'.
-decodeCSR :: BitVector 12 -> Maybe CSR
+decodeCSR :: BV 12 -> Maybe CSR
 decodeCSR 0xF11 = Just MVendorID
 decodeCSR 0xF12 = Just MArchID
 decodeCSR 0xF13 = Just MImpID
@@ -285,7 +285,7 @@ decodeCSR _ = Nothing
 data Privilege = MPriv | SPriv | UPriv
 
 -- | State of CSRs on reset.
-resetCSRs :: KnownNat w => Map (BitVector 12) (BitVector w)
+resetCSRs :: KnownNat w => Map (BV 12) (BV w)
 resetCSRs = Map.mapKeys encodeCSR $ Map.fromList
   [ (MVendorID, 0x0) -- implementation defined
   , (MArchID, 0x0) -- implemenation defined
@@ -295,7 +295,7 @@ resetCSRs = Map.mapKeys encodeCSR $ Map.fromList
   -- TODO: Finish this.
   ]
 
-getPrivCode :: Privilege -> BitVector 2
+getPrivCode :: Privilege -> BV 2
 getPrivCode MPriv = 3
 getPrivCode SPriv = 1
 getPrivCode UPriv = 0
@@ -311,15 +311,15 @@ raiseException e info = addStmt $ AbbrevStmt (RaiseException (getMCause e) info)
 
 -- | Raise floating point exceptions. This ORs the current fflags with the supplied
 -- 5-bit value.
-raiseFPExceptions :: (BVExpr (expr rv), StateExpr expr, KnownRV rv)
+raiseFPExceptions :: (BVExpr (expr rv), StateExpr expr, KnownRV rv, 6 <= RVWidth rv)
                   => expr rv 5 -- ^ The exception flags
                   -> SemanticsM expr rv ()
 raiseFPExceptions flags = do
-  let fcsr = rawReadCSR (litBV $ encodeCSR FCSR)
-  assignCSR (litBV $ encodeCSR FCSR) (fcsr `orE` (zextE flags))
+  let fcsr = rawReadCSR (litBV knownNat $ encodeCSR FCSR)
+  assignCSR (litBV knownNat $ encodeCSR FCSR) (fcsr `orE` zextE flags)
 
 dynamicRM :: (BVExpr (expr rv), StateExpr expr, KnownRV rv) => expr rv 3
-dynamicRM = let fcsr = rawReadCSR (litBV $ encodeCSR FCSR)
+dynamicRM = let fcsr = rawReadCSR (litBV knownNat $ encodeCSR FCSR)
             in extractE (knownNat @5) fcsr
 
 -- | Perform a computation that requires a rounding mode by supplying a rounding
@@ -331,8 +331,8 @@ withRM :: KnownRV rv
        -> (InstExpr fmt rv 3 -> SemanticsM (InstExpr fmt) rv ())
        -> SemanticsM (InstExpr fmt) rv ()
 withRM rm action = do
-  let rm' = iteE (rm `eqE` litBV 0b111) dynamicRM rm
-  branch ((rm' `eqE` litBV 0b101) `orE` (rm' `eqE` litBV 0b110))
+  let rm' = iteE (rm `eqE` litBV' 0b111) dynamicRM rm
+  branch ((rm' `eqE` litBV' 0b101) `orE` (rm' `eqE` litBV' 0b110))
     $> do iw <- instWord
           raiseException IllegalInstruction iw
     $> action rm

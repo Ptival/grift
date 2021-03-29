@@ -731,15 +731,15 @@ instance OrdF (OperandID fmt) where
 
 -- | RISC-V Operand lists, parameterized by format.
 data Operands :: Format -> * where
-  Operands :: FormatRepr fmt -> List BitVector (OperandTypes fmt) -> Operands fmt
+  Operands :: FormatRepr fmt -> List BV (OperandTypes fmt) -> Operands fmt
 
-prettyReg :: BitVector 5 -> Doc
-prettyReg bv = text "x" <> integer (bvIntegerU bv)
+prettyReg :: BV 5 -> Doc
+prettyReg bv = text "x" <> integer (asUnsigned bv)
 
-prettyImm :: BitVector w -> Doc
-prettyImm bv = text $ "0x" ++ showHex (bvIntegerS bv) ""
+prettyImm :: (KnownNat w, 1 <= w) => BV w -> Doc
+prettyImm bv = text $ "0x" ++ showHex (asSigned knownNat bv) ""
 
-_prettyAddr :: BitVector w -> BitVector 5 -> Doc
+_prettyAddr :: (KnownNat w, 1 <= w) => BV w -> BV 5 -> Doc
 _prettyAddr offset reg = prettyImm offset <> parens (prettyReg reg)
 
 commas :: [Doc] -> Doc
@@ -799,10 +799,24 @@ type family OpBitsTypes (fmt :: Format) :: [Nat] where
   OpBitsTypes RX = '[7, 3, 12]
   OpBitsTypes X  = '[]
 
+-- BV no longer contains a width witness, but we need it for some purposes, so
+-- this wrapper adds it.
+data SizedBV w where
+  SizedBV :: !(NatRepr w) -> BV w -> SizedBV w
+
+instance TestEquality SizedBV where
+  testEquality (SizedBV w1 _) (SizedBV w2 _) =
+    case testEquality w1 w2 of
+      Just Refl -> Just Refl
+      Nothing -> Nothing
+
+instance OrdF SizedBV where
+  compareF (SizedBV w1 _) (SizedBV w2 _) = compareF w1 w2
+
 -- | Bits fixed by an opcode.
 -- Holds all the bits that are fixed by a particular opcode.
 data OpBits :: Format -> * where
-  OpBits :: FormatRepr fmt -> List BitVector (OpBitsTypes fmt) -> OpBits fmt
+  OpBits :: FormatRepr fmt -> List SizedBV (OpBitsTypes fmt) -> OpBits fmt
 
 $(return [])
 instance TestEquality OpBits where
@@ -1574,7 +1588,7 @@ data Instruction (rv :: RV) (fmt :: Format) =
   Inst (Opcode rv fmt) (Operands fmt)
 
 -- | Create a new instruction with an associated operand list.
-mkInst :: KnownRepr FormatRepr fmt => Opcode rv fmt -> List BitVector (OperandTypes fmt) -> Instruction rv fmt
+mkInst :: KnownRepr FormatRepr fmt => Opcode rv fmt -> List BV (OperandTypes fmt) -> Instruction rv fmt
 mkInst opcode operands = Inst opcode (Operands knownRepr operands)
 
 -- Instances

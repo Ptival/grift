@@ -39,11 +39,11 @@ module GRIFT.InstructionSet.Priv
   ( privmFromRepr
   ) where
 
-import Data.BitVector.Sized.App
 import qualified Data.Parameterized.Map as Map
 import Data.Parameterized
 import Data.Parameterized.List
 
+import GRIFT.BitVector.BVApp
 import GRIFT.InstructionSet
 import GRIFT.Semantics
 import GRIFT.Semantics.Utils

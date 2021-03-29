@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -11,19 +12,21 @@ import Data.BitVector.Sized
 import Data.Parameterized
 import qualified Data.Sequence as Seq
 import Data.Sequence (Seq)
+import GHC.TypeLits (type (<=))
 
+import GRIFT.BitVector.BVApp
 import GRIFT.Semantics
 import GRIFT.Semantics.Utils
 import GRIFT.Types
 
 -- | Expand an 'AbbrevApp' into its unabbreviated version.
-expandAbbrevApp :: forall expr rv w . KnownRV rv => AbbrevApp expr rv w -> expr rv w
+expandAbbrevApp :: forall expr rv w . (KnownRV rv, 1 <= RVWidth rv) => AbbrevApp expr rv w -> expr rv w
 expandAbbrevApp (SafeGPRApp wRepr ridE) = iteE
-  (ridE `eqE` litBV 0)
-  (litBV (bitVector' wRepr (0 :: Integer)))
+  (ridE `eqE` litBV' 0)
+  (litBV' (litBV wRepr (0 :: Integer)))
   (stateExpr (LocApp (GPRApp wRepr ridE)))
 expandAbbrevApp (ReadCSRApp _ csr) = cases
-  [ (csr `eqE` (litBV $ encodeCSR FFlags)
+  [ (csr `eqE` (litBV' $ encodeCSR FFlags)
     , let fcsr = rawReadCSR (litBV $ encodeCSR FCSR)
           flags = extractE' (knownNat @5) (knownNat @0) fcsr
       in zextE flags
@@ -73,20 +76,20 @@ expandAbbrevStmt (RaiseException code info) = flip (^.) semStmts $ getSemantics 
 
   assignPC mtVecBase
 expandAbbrevStmt (WriteCSR csr val) = flip (^.) semStmts $ getSemantics $ branches
-  [ (csr `eqE` (litBV $ encodeCSR FFlags)
-    , do let val' = extractE' (knownNat @5) (knownNat @0) val
-             fcsr = rawReadCSR (litBV $ encodeCSR FCSR)
-             writeVal = extractE' (knownNat @27) (knownNat @5) fcsr `concatE` val'
-         assignCSR (litBV $ encodeCSR FCSR) (zextE writeVal))
-  , (csr `eqE` (litBV $ encodeCSR FRm)
-    , do let val' = extractE' (knownNat @3) (knownNat @0) val
-             fcsr = rawReadCSR (litBV $ encodeCSR FCSR)
-             writeVal = extractE' (knownNat @24) (knownNat @8) fcsr `concatE`
-                        val' `concatE`
-                        extractE' (knownNat @5) (knownNat @0) fcsr
-         assignCSR (litBV $ encodeCSR FCSR) (zextE writeVal))
-  , (csr `eqE` (litBV $ encodeCSR FCSR)
-    , do let writeVal = val `andE` (litBV 0xFF)
+  [ (csr `eqE` litBV (encodeCSR FFlags)
+  , do let val' = extractE' (knownNat @5) (knownNat @0) val
+           fcsr = rawReadCSR (litBV $ encodeCSR FCSR)
+           writeVal = extractE' (knownNat @27) (knownNat @5) fcsr `concatE` val'
+       assignCSR (litBV $ encodeCSR FCSR) (zextE writeVal))
+  , (csr `eqE` litBV (encodeCSR FRm)
+  , do let val' = extractE' (knownNat @3) (knownNat @0) val
+           fcsr = rawReadCSR (litBV $ encodeCSR FCSR)
+           writeVal = extractE' (knownNat @24) (knownNat @8) fcsr `concatE`
+                      val' `concatE`
+                      extractE' (knownNat @5) (knownNat @0) fcsr
+       assignCSR (litBV $ encodeCSR FCSR) (zextE writeVal))
+  , (csr `eqE` litBV (encodeCSR FCSR)
+    , do let writeVal = val `andE` litBV 0xFF
          assignCSR (litBV $ encodeCSR FCSR) (zextE writeVal))
   ]
   (assignCSR csr val)

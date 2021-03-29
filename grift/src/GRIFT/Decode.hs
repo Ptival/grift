@@ -49,10 +49,10 @@ module GRIFT.Decode
 
 import Control.Lens hiding ( (:<), Index, op, iset )
 import Data.BitVector.Sized
-import Data.BitVector.Sized.BitLayout
 import Data.Parameterized
 import Data.Parameterized.List
 
+import GRIFT.BitVector.BitLayout
 import GRIFT.InstructionSet
 import GRIFT.Types
 

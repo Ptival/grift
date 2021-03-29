@@ -41,11 +41,11 @@ module GRIFT.InstructionSet.Base
   where
 
 import Data.BitVector.Sized
-import Data.BitVector.Sized.App
 import qualified Data.Parameterized.Map as Map
 import Data.Parameterized
 import Data.Parameterized.List
 
+import GRIFT.BitVector.BVApp
 import GRIFT.InstructionSet
 import GRIFT.Semantics
 import GRIFT.Semantics.Utils
@@ -135,7 +135,7 @@ baseEncode = Map.fromList
   , Pair Illegal (OpBits XRepr Nil)
   ]
 
-baseSemantics :: forall rv . KnownRV rv => SemanticsMap rv
+baseSemantics :: forall rv . (KnownRV rv, 2 <= RVWidth rv, 12 <= RVWidth rv) => SemanticsMap rv
 baseSemantics = Map.fromList
   [ Pair Add $ instSemantics (Rd :< Rs1 :< Rs2 :< Nil) $ do
       comment "Adds register x[rs2] to register x[rs1] and writes the result to x[rd]."
@@ -171,7 +171,7 @@ baseSemantics = Map.fromList
 
       let x_rs1 = readGPR rs1
       let x_rs2 = readGPR rs2
-      let res = x_rs1 `sllE` (x_rs2 `andE` litBV (bitVector (intValue archWidth) - 1))
+      let res = x_rs1 `sllE` (x_rs2 `andE` bvInteger (intValue archWidth) - 1)
 
       assignGPR rd res
       incrPC
@@ -219,7 +219,7 @@ baseSemantics = Map.fromList
 
       archWidth <- getArchWidth
 
-      let mask = litBV (bitVector (intValue archWidth - 1))
+      let mask = bvInteger (intValue archWidth - 1)
       let x_rs1 = readGPR rs1
       let x_rs2 = readGPR rs2
       let res   = x_rs1 `srlE` (x_rs2 `andE` mask)
@@ -235,7 +235,7 @@ baseSemantics = Map.fromList
 
       archWidth <- getArchWidth
 
-      let mask = litBV (bitVector (intValue archWidth - 1))
+      let mask = bvInteger (intValue archWidth - 1)
       let x_rs1 = readGPR rs1
       let x_rs2 = readGPR rs2
       let res   = x_rs1 `sraE` (x_rs2 `andE` mask)
@@ -382,7 +382,7 @@ baseSemantics = Map.fromList
       rd :< rs1 :< imm12 :< Nil <- operandEs
 
       let x_rs1 = readGPR rs1
-      let res   = x_rs1 `xorE` (sextE imm12)
+      let res   = x_rs1 `xorE` sextE imm12
 
       assignGPR rd res
       incrPC
@@ -393,7 +393,7 @@ baseSemantics = Map.fromList
       rd :< rs1 :< imm12 :< Nil <- operandEs
 
       let x_rs1 = readGPR rs1
-      let res   = x_rs1 `orE` (sextE imm12)
+      let res   = x_rs1 `orE` sextE imm12
 
       assignGPR rd res
       incrPC
@@ -404,7 +404,7 @@ baseSemantics = Map.fromList
       rd :< rs1 :< imm12 :< Nil <- operandEs
 
       let x_rs1 = readGPR rs1
-      let res   = x_rs1 `andE` (sextE imm12)
+      let res   = x_rs1 `andE` sextE imm12
 
       assignGPR rd res
       incrPC
@@ -417,7 +417,7 @@ baseSemantics = Map.fromList
       let x_rs1 = readGPR rs1
 
       archWidth <- getArchWidth
-      let shiftBound = litBV (bitVector (intValue archWidth) :: BitVector 7)
+      let shiftBound = bvInteger (intValue archWidth)
       let shamtBad = notE (shamt `ltuE` shiftBound)
 
       -- Check that the control bits are all zero.
@@ -436,7 +436,7 @@ baseSemantics = Map.fromList
       let x_rs1 = readGPR rs1
 
       archWidth <- getArchWidth
-      let shiftBound = litBV (bitVector (intValue archWidth) :: BitVector 7)
+      let shiftBound = litBV (bitVector (intValue archWidth) :: BV 7)
       let shamtBad = notE (shamt `ltuE` shiftBound)
 
       -- Check that the control bits are all zero.
@@ -455,7 +455,7 @@ baseSemantics = Map.fromList
       let x_rs1 = readGPR rs1
 
       archWidth <- getArchWidth
-      let shiftBound = litBV (bitVector (intValue archWidth) :: BitVector 7)
+      let shiftBound = litBV (bitVector (intValue archWidth) :: BV 7)
       let shamtBad = notE (shamt `ltuE` shiftBound)
 
       -- Check that the control bits are all zero.
